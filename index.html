@@ -1896,8 +1896,27 @@
                     }
                 }
             } catch (error) {
-                loginError.textContent = '登录失败，请检查后端服务是否启动';
+                // 更详细的错误信息
+                let errorMsg = '登录失败，请检查后端服务是否启动';
+                if (error.message) {
+                    if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || error.message.includes('ERR_CONNECTION_REFUSED')) {
+                        errorMsg = `无法连接到后端服务！\n\n当前API地址: ${API_BASE}\n\n请确认：\n1. 后端服务已启动 (运行 python app.py)\n2. 服务运行在端口5000\n3. 浏览器控制台(F12)查看详细错误\n\n提示：如果直接打开HTML文件，请通过 http://localhost:5000/index.html 访问`;
+                    } else {
+                        errorMsg = `登录失败: ${error.message}`;
+                    }
+                }
+                loginError.textContent = errorMsg;
+                loginError.style.whiteSpace = 'pre-line'; // 允许换行显示
                 console.error('登录错误:', error);
+                console.error('API地址:', API_BASE);
+                console.error('错误详情:', error);
+                
+                // 尝试测试连接
+                testBackendConnection().then(connected => {
+                    if (!connected) {
+                        loginError.textContent += `\n\n后端连接测试失败，请检查服务是否启动`;
+                    }
+                });
             }
         });
         loginPassInput.addEventListener('keyup', (e) => {
@@ -1919,7 +1938,57 @@
         }
 
         // ========== JM模型相关功能 ==========
-        const API_BASE = 'http://localhost:5000';
+        // 自动检测API地址
+        const getApiBase = () => {
+            const hostname = window.location.hostname;
+            const protocol = window.location.protocol;
+            
+            // 如果通过file://协议打开（直接打开HTML文件），使用localhost
+            if (protocol === 'file:' || !hostname || hostname === '') {
+                console.warn('检测到file://协议，使用localhost:5000');
+                return 'http://localhost:5000';
+            }
+            
+            // 如果是localhost或127.0.0.1，使用localhost
+            if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                return 'http://localhost:5000';
+            }
+            
+            // 否则使用当前主机IP（保持协议一致）
+            const apiUrl = protocol === 'https:' ? `https://${hostname}:5000` : `http://${hostname}:5000`;
+            return apiUrl;
+        };
+        const API_BASE = getApiBase();
+        
+        // 在控制台输出API地址，方便调试
+        console.log('API地址:', API_BASE);
+        console.log('当前页面地址:', window.location.href);
+        
+        // 测试后端连接
+        async function testBackendConnection() {
+            try {
+                const response = await fetch(`${API_BASE}/health`, {
+                    method: 'GET',
+                    timeout: 3000
+                });
+                if (response.ok) {
+                    console.log('✓ 后端服务连接成功');
+                    return true;
+                } else {
+                    console.error('✗ 后端服务响应异常:', response.status);
+                    return false;
+                }
+            } catch (error) {
+                console.error('✗ 后端服务连接失败:', error.message);
+                console.error('请确认：1. 后端服务已启动 (python app.py) 2. 服务运行在端口5000');
+                return false;
+            }
+        }
+        
+        // 页面加载时测试连接
+        window.addEventListener('DOMContentLoaded', () => {
+            testBackendConnection();
+        });
         let jmCurrentData = null; // 存储当前加载的失效间隔数据
         let jmPredictionChart = null; // Chart.js图表实例
         let jmReliabilityChart = null; // Chart.js图表实例
