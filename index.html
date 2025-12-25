@@ -1862,13 +1862,68 @@
                     };
                 }
                 
-                const response = await fetch(`${API_BASE}/api/auth/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(requestBody)
-                });
+                // 显示加载状态
+                loginError.textContent = '正在连接后端服务...';
+                loginError.style.color = '#666';
+                loginBtn.disabled = true;
+                const originalBtnText = loginBtn.textContent;
+                loginBtn.textContent = '登录中...';
                 
-                const result = await response.json();
+                console.log('=== 登录请求调试信息 ===');
+                console.log('API地址:', API_BASE);
+                console.log('请求URL:', `${API_BASE}/api/auth/login`);
+                console.log('请求体:', requestBody);
+                
+                let response;
+                try {
+                    response = await fetch(`${API_BASE}/api/auth/login`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify(requestBody),
+                        mode: 'cors'
+                    });
+                    console.log('✓ 请求已发送，等待响应...');
+                } catch (fetchError) {
+                    loginBtn.disabled = false;
+                    loginBtn.textContent = originalBtnText;
+                    console.error('✗ 请求发送失败:', fetchError);
+                    throw new Error(`网络请求失败: ${fetchError.message}`);
+                }
+                
+                console.log('响应状态:', response.status, response.statusText);
+                console.log('响应头:', Object.fromEntries(response.headers.entries()));
+                
+                if (!response.ok) {
+                    let errorText = '';
+                    try {
+                        errorText = await response.text();
+                        console.error('响应错误内容:', errorText);
+                    } catch (e) {
+                        errorText = `HTTP ${response.status} ${response.statusText}`;
+                    }
+                    loginBtn.disabled = false;
+                    loginBtn.textContent = originalBtnText;
+                    throw new Error(`服务器错误 (${response.status}): ${errorText}`);
+                }
+                
+                let result;
+                try {
+                    const responseText = await response.text();
+                    console.log('响应文本:', responseText);
+                    result = JSON.parse(responseText);
+                    console.log('✓ 响应解析成功:', result);
+                } catch (parseError) {
+                    loginBtn.disabled = false;
+                    loginBtn.textContent = originalBtnText;
+                    console.error('✗ 响应解析失败:', parseError);
+                    throw new Error(`响应解析失败: ${parseError.message}`);
+                }
+                
+                loginBtn.disabled = false;
+                loginBtn.textContent = originalBtnText;
                 
                 if (result.success && result.user) {
                     loginScreen.style.display = 'none';
